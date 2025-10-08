@@ -3,6 +3,8 @@ Report Generator with Unclassified Step Analysis
 
 This module orchestrates the entire report generation process with
 comprehensive diagnostic capabilities for debugging classification issues.
+
+Uses priority-based single-category classification.
 """
 
 import json
@@ -33,9 +35,9 @@ def generate_cache_report(
     Process:
     1. Scan all steps from DynamoDB (with pagination)
     2. Filter by date range and criteria
-    3. Classify each step into categories
+    3. Classify each step into EXACTLY ONE category (priority-based)
     4. Track unclassified steps with diagnostics
-    5. Calculate statistics (counts, percentages)
+    5. Calculate statistics (counts, percentages that sum to 100%)
     6. Build report structure
     7. Save report and diagnostic files
     
@@ -66,7 +68,7 @@ def generate_cache_report(
         
         total_rows_analysed += 1
         
-        # Classify step and get diagnostics for unclassified
+        # Classify step into EXACTLY ONE category
         categories, diagnosis = classify_step(item)
         
         # If unclassified, log detailed diagnosis
@@ -90,7 +92,8 @@ def generate_cache_report(
                 logger.warning(f"    Reason: {check_result['reason']}")
             logger.warning("="*70)
         
-        # Add step to categories
+        # Add step to its ONE category
+        # categories will only have ONE element due to priority-based classification
         for category in categories:
             categorized_steps[category].append(step_dict)
         
@@ -225,20 +228,23 @@ def build_report_structure(
 ) -> Dict:
     """
     Build the final report structure with statistics.
+    
+    With priority-based classification, the sum of all counts
+    will EXACTLY equal total_rows (100%).
     """
     report_data: Dict = {}
     
-    # Define all categories
+    # Categories in PRIORITY ORDER (matches classifier.py)
     category_names: List[str] = [
-        "ocr_steps",
-        "unblocker_call",
-        "failed_step",
-        "no_cache_documents_found",
-        "less_similarity_threshold",
-        "cache_read_status_none",
-        "failed_at_cand_nos_after_must_match_filter",
-        "failed_after_similar_document_found_with_threshold_after_must_match_filter",
-        "unclassified"
+        "unblocker_call",                    # Priority 1
+        "ocr_steps",                         # Priority 2
+        "failed_step",                       # Priority 3
+        "cache_read_status_none",            # Priority 4
+        "no_cache_documents_found",          # Priority 5
+        "less_similarity_threshold",         # Priority 6
+        "failed_at_cand_nos_after_must_match_filter",  # Priority 7
+        "failed_after_similar_document_found_with_threshold_after_must_match_filter",  # Priority 8
+        "unclassified"                       # Priority 9
     ]
     
     # Build report for each category
@@ -301,18 +307,35 @@ def print_report_summary(report: Dict) -> None:
     print("CACHE FAILURE CLASSIFICATION REPORT - SUMMARY")
     print("="*70)
     print(f"Total Rows Analysed: {report['total_rows_analysed']}")
-    print("\nCategory Breakdown:")
+    print("\nCategory Breakdown (Priority Order):")
     print("-"*70)
     
-    for category_name, category_data in report['report'].items():
-        count: int = category_data['document_count']
-        percentage: str = category_data['percentage']
-        
-        display_name: str = category_name.replace('_', ' ').title()
-        
-        print(f"{display_name}:")
-        print(f"  Count: {count:>5}")
-        print(f"  Percentage: {percentage:>8}")
-        print()
+    # Print in priority order (same as category_names list)
+    priority_order = [
+        "unblocker_call",
+        "ocr_steps",
+        "failed_step",
+        "cache_read_status_none",
+        "no_cache_documents_found",
+        "less_similarity_threshold",
+        "failed_at_cand_nos_after_must_match_filter",
+        "failed_after_similar_document_found_with_threshold_after_must_match_filter",
+        "unclassified"
+    ]
     
+    for category_name in priority_order:
+        if category_name in report['report']:
+            category_data = report['report'][category_name]
+            count: int = category_data['document_count']
+            percentage: str = category_data['percentage']
+            
+            display_name: str = category_name.replace('_', ' ').title()
+            
+            print(f"{display_name}:")
+            print(f"  Count: {count:>5}")
+            print(f"  Percentage: {percentage:>8}")
+            print()
+    
+    print("="*70)
+    print(f"Note: With priority-based classification, percentages sum to 100.00%")
     print("="*70)
