@@ -24,8 +24,11 @@ class CacheFailureCategory(Enum):
     Each step is classified into the FIRST matching category.
     Using Enum ensures type-safe classification.
     """
+    UNDOABLE = "undoable"                                # Priority 0
     UNBLOCKER_CALL = "unblocker_call"                    # Priority 1
     OCR_STEPS = "ocr_steps"                              # Priority 2
+    DYNAMIC_STEP = "dynamic_step"
+    NULL_LLM_OUTPUT = "null_llm_output"
     FAILED_STEP = "failed_step"                          # Priority 3
     CACHE_READ_STATUS_NONE = "cache_read_status_none"    # Priority 4
     NO_CACHE_DOCUMENTS_FOUND = "no_cache_documents_found"  # Priority 5

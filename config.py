@@ -28,7 +28,7 @@ load_dotenv()
 # os.getenv() reads from environment variables with a fallback default
 AWS_ACCESS_KEY_ID: str = os.getenv('AWS_ACCESS_KEY_ID', '')
 AWS_SECRET_ACCESS_KEY: str = os.getenv('AWS_SECRET_ACCESS_KEY', '')
-AWS_REGION: str = os.getenv('AWS_REGION', 'ap-south-2')
+AWS_REGION: str = os.getenv('AWS_REGION', 'ap-south-1')
 
 # DynamoDB Settings
 DYNAMODB_TABLE_NAME: str = os.getenv('DYNAMODB_TABLE_NAME', 'TestSteps')

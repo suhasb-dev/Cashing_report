@@ -165,8 +165,8 @@ def main() -> int:
         report: Dict = generate_cache_report(
             start_date=args.start_date,
             end_date=args.end_date,
-            save_to_file=not args.no_save,
-            output_path=args.output
+            save_to_file=True,
+            output_path="rep.json"
         )
         
         end_time: datetime = datetime.now()

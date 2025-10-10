@@ -79,6 +79,7 @@ def generate_cache_report(
             logger.warning("="*70)
             logger.warning(f"UNCLASSIFIED STEP: {diagnosis['step_id']}")
             logger.warning(f"Step Classification: {diagnosis['step_classification']}")
+            # logger.warning(f"Used Ensemble: {diagnosis['is_ensemble']}")
             logger.warning(f"Cache Read Status: {diagnosis['cache_read_status']}")
             logger.warning(f"Test Step Status: {diagnosis['test_step_status']}")
             logger.warning(f"Has Cache Query Results: {diagnosis['has_cache_query_results']}")
@@ -236,9 +237,12 @@ def build_report_structure(
     
     # Categories in PRIORITY ORDER (matches classifier.py)
     category_names: List[str] = [
+        "undoable",
         "unblocker_call",                    # Priority 1
         "ocr_steps",                         # Priority 2
+        "dynamic_step",
         "failed_step",                       # Priority 3
+        "null_llm_output",                   # Priority 3.5
         "cache_read_status_none",            # Priority 4
         "no_cache_documents_found",          # Priority 5
         "less_similarity_threshold",         # Priority 6
@@ -312,9 +316,12 @@ def print_report_summary(report: Dict) -> None:
     
     # Print in priority order (same as category_names list)
     priority_order = [
+        "undoable",
         "unblocker_call",
         "ocr_steps",
+        "dynamic_step",
         "failed_step",
+        "null_llm_output",
         "cache_read_status_none",
         "no_cache_documents_found",
         "less_similarity_threshold",

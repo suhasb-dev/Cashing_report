@@ -40,19 +40,28 @@ def classify_step(step: Dict) -> Tuple[List[str], Optional[Dict]]:
         Tuple of ([single category], diagnostic dict or None)
     """
     # Priority 1: Unblocker Call (HIGHEST)
+    if check_undoable_category(step):
+        return [CacheFailureCategory.UNDOABLE.value], None
+
     if check_unblocker_category(step):
         return [CacheFailureCategory.UNBLOCKER_CALL.value], None
     
     # Priority 2: OCR Steps
     if check_ocr_category(step):
         return [CacheFailureCategory.OCR_STEPS.value], None
+
+    if check_dynamic_component(step):
+        return [CacheFailureCategory.DYNAMIC_STEP.value], None
     
     # Priority 3: Failed Step
     if check_failed_step_category(step):
         return [CacheFailureCategory.FAILED_STEP.value], None
+
+    if check_null_llm_output(step):
+        return [CacheFailureCategory.NULL_LLM_OUTPUT.value], None
     
-    # Priority 4: Cache Read Status None (Dynamic Components)
-    if check_dynamic_components_category(step):
+    # Priority 4: Cache Read Status None
+    if check_cache_read_status_none(step):
         return [CacheFailureCategory.CACHE_READ_STATUS_NONE.value], None
     
     # Priority 5: No Cache Documents Found (cache_read_status = -1)
@@ -118,7 +127,7 @@ def diagnose_unclassified_step(step: Dict) -> Dict[str, any]:
     
     has_cache_read_status = 'cache_read_status' in step
     diagnosis['category_checks']['cache_read_status_none'] = {
-        'passed': check_dynamic_components_category(step),
+        'passed': check_cache_read_status_none(step),
         'reason': f"cache_read_status field {'missing' if not has_cache_read_status else 'present'}"
     }
     
@@ -135,18 +144,29 @@ def diagnose_unclassified_step(step: Dict) -> Dict[str, any]:
 # CATEGORY CHECK FUNCTIONS (IN PRIORITY ORDER)
 # ============================================================================
 
+def check_undoable_category(step: Dict) -> bool:
+    """
+    Priority 0: Check if step is undoable.
+    """
+    llm_result = get_nested_value(step, 'llm_output', 'S')
+    
+    return "undoable" in llm_result.lower() if llm_result else False
+
+
 def check_unblocker_category(step: Dict) -> bool:
     """
     Priority 1: Check if step is a blocker/unblocker call.
     """
-    is_blocker_bool = get_nested_value(step, 'is_blocker', 'BOOL')
-    is_blocker_str = get_nested_value(step, 'is_blocker', 'S')
+    # is_blocker_bool = get_nested_value(step, 'is_blocker', 'BOOL')
+    # is_blocker_str = get_nested_value(step, 'is_blocker', 'S')
     
-    return (
-        is_blocker_bool is True or 
-        is_blocker_str == 'TRUE' or 
-        is_blocker_str == 'true'
-    )
+    # return (
+    #     is_blocker_bool is True or 
+    #     is_blocker_str == 'TRUE' or 
+    #     is_blocker_str == 'true'
+    # )
+    llm_result = get_nested_value(step, 'llm_output', 'S')
+    return "unblock: " in llm_result.lower() if llm_result else False
 
 
 def check_ocr_category(step: Dict) -> bool:
@@ -160,6 +180,14 @@ def check_ocr_category(step: Dict) -> bool:
         ocr_output != '' and 
         ocr_output != 'NA'
     )
+
+def check_dynamic_component(step: Dict) -> bool:
+    """
+    Priority 2.5: Check if the step used dynamic component resolution.
+    """
+    is_ensemble = get_nested_value(step, 'ensemble_used', 'BOOL')
+    
+    return is_ensemble is True
 
 
 def check_failed_step_category(step: Dict) -> bool:
@@ -178,7 +206,7 @@ def check_failed_step_category(step: Dict) -> bool:
     return is_failed
 
 
-def check_dynamic_components_category(step: Dict) -> bool:
+def check_cache_read_status_none(step: Dict) -> bool:
     """
     Priority 4: Check if cache_read_status is missing.
     
@@ -186,6 +214,15 @@ def check_dynamic_components_category(step: Dict) -> bool:
     because the step used dynamic component resolution.
     """
     return 'cache_read_status' not in step
+
+
+def check_null_llm_output(step: Dict) -> bool:
+    """
+    Priority 3.5: Check if the step execution failed.
+    """
+    llm_output = get_nested_value(step, 'llm_output', 'S')
+    is_null_llm_output = llm_output == ''
+    return is_null_llm_output
 
 
 def check_no_documents_found_category(step: Dict) -> bool:
@@ -261,7 +298,7 @@ def check_must_match_filter_category(step: Dict) -> bool:
     for doc in cache_results:
         similarity = doc.get('similarity_score', 0)
         
-        if similarity >= SIMILARITY_THRESHOLD:
+        if similarity > SIMILARITY_THRESHOLD:
             report = doc.get('component_selection_report')
             
             if report and isinstance(report, dict):
@@ -289,7 +326,7 @@ def check_failed_after_similar_doc_category(step: Dict) -> bool:
         similarity = doc.get('similarity_score', 0)
         is_used = doc.get('is_used', False)
         
-        if similarity >= SIMILARITY_THRESHOLD and not is_used:
+        if similarity > SIMILARITY_THRESHOLD and not is_used:
             report = doc.get('component_selection_report')
             
             if report and isinstance(report, dict):
