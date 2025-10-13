@@ -158,3 +158,66 @@ def scan_test_steps_with_pagination() -> Iterator[Dict]:
         f"Scan complete. Pages: {page_count}, "
         f"Total items: {yielded_count}"
     )
+
+
+# ============================================================================
+# PARALLEL SCANNING FOR BULK ANALYSIS
+# ============================================================================
+
+def scan_with_parallel_segments(total_segments: int = 4) -> Iterator[Dict]:
+    """
+    Scan DynamoDB table using parallel segments for maximum throughput.
+    
+    This function provides parallel scanning capability for bulk analysis
+    where we need to process large amounts of data efficiently.
+    
+    Args:
+        total_segments: Number of parallel segments (recommended: 4-8)
+        
+    Yields:
+        Dict: DynamoDB items (in DynamoDB JSON format)
+        
+    Example usage:
+        >>> for item in scan_with_parallel_segments(total_segments=4):
+        ...     step_id = item['step_id']['S']
+        ...     print(step_id)
+    """
+    import concurrent.futures
+    from concurrent.futures import ThreadPoolExecutor
+    
+    def scan_segment(segment: int) -> Iterator[Dict]:
+        """Scan a single segment of the table"""
+        client = get_dynamodb_client()
+        scan_kwargs = {
+            'TableName': DYNAMODB_TABLE_NAME,
+            'FilterExpression': 'step_classification IN (:tap, :text)',
+            'ExpressionAttributeValues': {
+                ':tap': {'S': 'TAP'},
+                ':text': {'S': 'TEXT'}
+            },
+            'Segment': segment,
+            'TotalSegments': total_segments
+        }
+        
+        while True:
+            response = client.scan(**scan_kwargs)
+            
+            for item in response.get('Items', []):
+                yield item
+            
+            if 'LastEvaluatedKey' not in response:
+                break
+            
+            scan_kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
+    
+    logger.info(f"Starting parallel scan with {total_segments} segments")
+    
+    # Use ThreadPoolExecutor for parallel scanning
+    with ThreadPoolExecutor(max_workers=total_segments) as executor:
+        futures = [executor.submit(scan_segment, i) for i in range(total_segments)]
+        
+        for future in concurrent.futures.as_completed(futures):
+            for item in future.result():
+                yield item
+    
+    logger.info("Parallel scan complete")

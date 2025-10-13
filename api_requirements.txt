@@ -1,0 +1,9 @@
+# API Server Dependencies
+Flask==2.3.3
+Flask-CORS==4.0.0
+Werkzeug==2.3.7
+requests==2.32.5
+
+# Existing project dependencies (from requirements.txt)
+boto3==1.40.47
+python-dotenv==1.1.1
